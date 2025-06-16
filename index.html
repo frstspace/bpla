@@ -75,15 +75,22 @@
             border-radius: 5px;
         }
         
-        #health {
+        #healthBar {
             position: fixed;
             top: 10px;
             right: 10px;
-            color: white;
-            font-size: 20px;
-            background-color: rgba(0, 0, 0, 0.5);
-            padding: 5px 10px;
+            width: 100px;
+            height: 15px;
+            background-color: rgba(255, 0, 0, 0.3);
             border-radius: 5px;
+            overflow: hidden;
+        }
+        
+        #healthFill {
+            height: 100%;
+            width: 100%;
+            background-color: red;
+            transition: width 0.3s;
         }
         
         #gameOver {
@@ -99,9 +106,26 @@
             align-items: center;
             color: white;
             font-size: 36px;
+            z-index: 100;
         }
         
-        #restartBtn {
+        #startScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 36px;
+            z-index: 200;
+        }
+        
+        #restartBtn, #startBtn {
             margin-top: 20px;
             padding: 10px 20px;
             font-size: 24px;
@@ -117,7 +141,9 @@
     <canvas id="gameCanvas"></canvas>
     
     <div id="score">Очки: 0</div>
-    <div id="health">Жизни: 100</div>
+    <div id="healthBar">
+        <div id="healthFill"></div>
+    </div>
     
     <div id="controls">
         <div id="moveButtons">
@@ -127,20 +153,37 @@
         <div class="control-btn" id="fireBtn">ОГОНЬ</div>
     </div>
     
+    <div id="startScreen">
+        <h1>Воздушный Бой</h1>
+        <button id="startBtn">Начать игру</button>
+    </div>
+    
     <div id="gameOver">
         <h1>Игра Окончена</h1>
         <p id="finalScore">Ваш счет: 0</p>
         <button id="restartBtn">Играть снова</button>
     </div>
 
+    <!-- Элементы для звуков -->
+    <audio id="shootSound" src="shoot.mp3" preload="auto"></audio>
+    <audio id="explosionSound" src="explosion.mp3" preload="auto"></audio>
+    <audio id="engineSound" src="engine.mp3" loop preload="auto"></audio>
+
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const scoreElement = document.getElementById('score');
-        const healthElement = document.getElementById('health');
+        const healthFillElement = document.getElementById('healthFill');
         const gameOverElement = document.getElementById('gameOver');
+        const startScreenElement = document.getElementById('startScreen');
         const finalScoreElement = document.getElementById('finalScore');
         const restartBtn = document.getElementById('restartBtn');
+        const startBtn = document.getElementById('startBtn');
+        
+        // Звуковые элементы
+        const shootSound = document.getElementById('shootSound');
+        const explosionSound = document.getElementById('explosionSound');
+        const engineSound = document.getElementById('engineSound');
         
         // Размеры canvas
         canvas.width = window.innerWidth;
@@ -149,7 +192,7 @@
         // Игровые переменные
         let score = 0;
         let health = 100;
-        let gameRunning = true;
+        let gameRunning = false;
         let lastEnemySpawn = 0;
         let lastBossSpawn = 0;
         let enemies = [];
@@ -164,9 +207,9 @@
         const gunHeight = 60;
         const bulletRadius = 5;
         const enemySizes = {
-            small: { width: 40, height: 30, health: 1, score: 10 },
-            medium: { width: 60, height: 45, health: 2, score: 25 },
-            large: { width: 100, height: 75, health: 5, score: 50 }
+            small: { width: 40, height: 40, health: 1, score: 10 },
+            medium: { width: 60, height: 60, health: 2, score: 25 },
+            large: { width: 100, height: 100, health: 5, score: 50 }
         };
         
         // Позиция пушки
@@ -223,7 +266,7 @@
                 this.x = x;
                 this.y = y;
                 this.radius = bulletRadius;
-                this.speed = 8; // Медленная скорость пули для усложнения игры
+                this.speed = 8;
             }
             
             update() {
@@ -238,7 +281,7 @@
             }
         }
         
-        // Класс вражеского самолета
+        // Класс вражеского самолета (треугольник)
         class Enemy {
             constructor(type) {
                 this.type = type;
@@ -247,17 +290,15 @@
                 this.y = -this.size.height;
                 this.speed = 2 + Math.random() * 2;
                 this.health = this.size.health;
-                this.dodgeChance = 0.3; // 30% шанс уклониться от пули
+                this.dodgeChance = 0.3;
                 this.dodgeDirection = Math.random() > 0.5 ? 1 : -1;
                 this.dodgeTimer = 0;
                 this.dodgeDuration = 0;
             }
             
             update() {
-                // Обычное движение
                 this.y += this.speed;
                 
-                // Уклонение от пуль
                 this.dodgeTimer++;
                 if (this.dodgeTimer > 60 && Math.random() < 0.02) {
                     this.dodgeDirection = Math.random() > 0.5 ? 1 : -1;
@@ -270,18 +311,20 @@
                     this.dodgeDuration--;
                 }
                 
-                // Ограничение в пределах экрана
                 this.x = Math.max(0, Math.min(canvas.width - this.size.width, this.x));
             }
             
             draw() {
-                ctx.fillStyle = this.type === 'large' ? '#8B0000' : (this.type === 'medium' ? '#8B4513' : '#4682B4');
-                ctx.fillRect(this.x, this.y, this.size.width, this.size.height);
+                // Рисуем треугольник (вражеский самолет)
+                ctx.fillStyle = this.type === 'large' ? '#8B0000' : 
+                                (this.type === 'medium' ? '#8B4513' : '#4682B4');
                 
-                // Рисуем крылья
-                ctx.fillStyle = this.type === 'large' ? '#A52A2A' : (this.type === 'medium' ? '#A0522D' : '#5F9EA0');
-                ctx.fillRect(this.x - 15, this.y + this.size.height/3, 15, this.size.height/3);
-                ctx.fillRect(this.x + this.size.width, this.y + this.size.height/3, 15, this.size.height/3);
+                ctx.beginPath();
+                ctx.moveTo(this.x + this.size.width/2, this.y); // Верхняя точка
+                ctx.lineTo(this.x, this.y + this.size.height); // Левая нижняя точка
+                ctx.lineTo(this.x + this.size.width, this.y + this.size.height); // Правая нижняя точка
+                ctx.closePath();
+                ctx.fill();
                 
                 // Для большого самолета рисуем здоровье
                 if (this.type === 'large') {
@@ -293,12 +336,44 @@
             }
             
             checkHit(bullet) {
-                // Проверка попадания с учетом шанса уклонения
                 if (Math.random() < this.dodgeChance) return false;
                 
-                return bullet.x > this.x && bullet.x < this.x + this.size.width &&
-                       bullet.y > this.y && bullet.y < this.y + this.size.height;
+                // Проверка попадания в треугольник
+                const triangleTop = { x: this.x + this.size.width/2, y: this.y };
+                const triangleLeft = { x: this.x, y: this.y + this.size.height };
+                const triangleRight = { x: this.x + this.size.width, y: this.y + this.size.height };
+                
+                // Проверяем, находится ли пуля внутри треугольника
+                return pointInTriangle(
+                    { x: bullet.x, y: bullet.y },
+                    triangleTop,
+                    triangleLeft,
+                    triangleRight
+                );
             }
+        }
+        
+        // Функция для проверки точки в треугольнике
+        function pointInTriangle(p, a, b, c) {
+            // Вычисляем векторы
+            const v0 = [c.x - a.x, c.y - a.y];
+            const v1 = [b.x - a.x, b.y - a.y];
+            const v2 = [p.x - a.x, p.y - a.y];
+            
+            // Вычисляем скалярные произведения
+            const dot00 = v0[0]*v0[0] + v0[1]*v0[1];
+            const dot01 = v0[0]*v1[0] + v0[1]*v1[1];
+            const dot02 = v0[0]*v2[0] + v0[1]*v2[1];
+            const dot11 = v1[0]*v1[0] + v1[1]*v1[1];
+            const dot12 = v1[0]*v2[0] + v1[1]*v2[1];
+            
+            // Вычисляем барицентрические координаты
+            const invDenom = 1 / (dot00 * dot11 - dot01 * dot01);
+            const u = (dot11 * dot02 - dot01 * dot12) * invDenom;
+            const v = (dot00 * dot12 - dot01 * dot02) * invDenom;
+            
+            // Проверяем, находится ли точка в треугольнике
+            return (u >= 0) && (v >= 0) && (u + v < 1);
         }
         
         // Создание вражеского самолета
@@ -327,6 +402,8 @@
                         
                         if (enemies[j].health <= 0) {
                             score += enemies[j].size.score;
+                            explosionSound.currentTime = 0;
+                            explosionSound.play();
                             enemies.splice(j, 1);
                         }
                         
@@ -340,6 +417,7 @@
             for (let i = enemies.length - 1; i >= 0; i--) {
                 if (enemies[i].y + enemies[i].size.height > gunY) {
                     health -= enemies[i].type === 'large' ? 20 : (enemies[i].type === 'medium' ? 10 : 5);
+                    healthFillElement.style.width = `${health}%`;
                     enemies.splice(i, 1);
                     
                     if (health <= 0) {
@@ -352,22 +430,38 @@
         // Конец игры
         function gameOver() {
             gameRunning = false;
+            engineSound.pause();
             finalScoreElement.textContent = `Ваш счет: ${score}`;
             gameOverElement.style.display = 'flex';
         }
         
-        // Перезапуск игры
-        restartBtn.addEventListener('click', () => {
+        // Начало игры
+        function startGame() {
             score = 0;
             health = 100;
+            healthFillElement.style.width = '100%';
             enemies = [];
             bullets = [];
             gunX = canvas.width / 2 - gunWidth / 2;
             gameRunning = true;
+            startScreenElement.style.display = 'none';
             gameOverElement.style.display = 'none';
             lastEnemySpawn = 0;
             lastBossSpawn = 0;
-        });
+            
+            // Запуск звуков
+            try {
+                engineSound.play();
+            } catch (e) {
+                console.log("Автовоспроизведение звука заблокировано:", e);
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Перезапуск игры
+        restartBtn.addEventListener('click', startGame);
+        startBtn.addEventListener('click', startGame);
         
         // Основной игровой цикл
         function gameLoop(timestamp) {
@@ -383,6 +477,8 @@
             // Стрельба
             if (firePressed && timestamp - lastFired > 300) {
                 bullets.push(new Bullet(gunX + gunWidth / 2, gunY));
+                shootSound.currentTime = 0;
+                shootSound.play();
                 lastFired = timestamp;
             }
             
@@ -425,13 +521,9 @@
             
             // Обновление интерфейса
             scoreElement.textContent = `Очки: ${score}`;
-            healthElement.textContent = `Жизни: ${health}`;
             
             requestAnimationFrame(gameLoop);
         }
-        
-        // Запуск игры
-        requestAnimationFrame(gameLoop);
         
         // Обработка изменения размера окна
         window.addEventListener('resize', () => {
