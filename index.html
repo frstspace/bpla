@@ -315,38 +315,37 @@
             }
             
             draw() {
-                // Рисуем треугольник (вражеский самолет)
+                // Рисуем перевернутый треугольник (острым концом к игроку)
                 ctx.fillStyle = this.type === 'large' ? '#8B0000' : 
                                 (this.type === 'medium' ? '#8B4513' : '#4682B4');
                 
                 ctx.beginPath();
-                ctx.moveTo(this.x + this.size.width/2, this.y); // Верхняя точка
-                ctx.lineTo(this.x, this.y + this.size.height); // Левая нижняя точка
-                ctx.lineTo(this.x + this.size.width, this.y + this.size.height); // Правая нижняя точка
+                ctx.moveTo(this.x + this.size.width/2, this.y + this.size.height); // Нижняя точка
+                ctx.lineTo(this.x, this.y); // Левая верхняя точка
+                ctx.lineTo(this.x + this.size.width, this.y); // Правая верхняя точка
                 ctx.closePath();
                 ctx.fill();
                 
                 // Для большого самолета рисуем здоровье
                 if (this.type === 'large') {
                     ctx.fillStyle = 'red';
-                    ctx.fillRect(this.x, this.y - 10, this.size.width, 5);
+                    ctx.fillRect(this.x, this.y + this.size.height + 5, this.size.width, 5);
                     ctx.fillStyle = 'green';
-                    ctx.fillRect(this.x, this.y - 10, this.size.width * (this.health / this.size.health), 5);
+                    ctx.fillRect(this.x, this.y + this.size.height + 5, this.size.width * (this.health / this.size.health), 5);
                 }
             }
             
             checkHit(bullet) {
                 if (Math.random() < this.dodgeChance) return false;
                 
-                // Проверка попадания в треугольник
-                const triangleTop = { x: this.x + this.size.width/2, y: this.y };
-                const triangleLeft = { x: this.x, y: this.y + this.size.height };
-                const triangleRight = { x: this.x + this.size.width, y: this.y + this.size.height };
+                // Проверка попадания в перевернутый треугольник
+                const triangleBottom = { x: this.x + this.size.width/2, y: this.y + this.size.height };
+                const triangleLeft = { x: this.x, y: this.y };
+                const triangleRight = { x: this.x + this.size.width, y: this.y };
                 
-                // Проверяем, находится ли пуля внутри треугольника
                 return pointInTriangle(
                     { x: bullet.x, y: bullet.y },
-                    triangleTop,
+                    triangleBottom,
                     triangleLeft,
                     triangleRight
                 );
